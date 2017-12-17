@@ -7,3 +7,14 @@ are not supported by JavaCC.
 So I hacked together this little project, in Kotlin.
 
 For now it basically get a JavaCC grammar and produces a lexer and a parser ANTLR grammar which should hopefully be equivalent.
+
+## Generate ANTLR Lexer & Parser
+
+Simply look at the class `JavaCCToAntlrConverter`. It takes the file name of the JavaCC grammar and outputs
+a Lexer and a parser Grammar.
+
+## Generate an ANTLR in memory
+
+```java
+
+```
