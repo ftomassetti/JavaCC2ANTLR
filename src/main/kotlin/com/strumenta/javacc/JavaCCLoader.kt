@@ -95,10 +95,11 @@ private fun RegExprSpec.process(): String {
     return this.rexp.tokenProcess()
 }
 
-data class RuleDefinition(val name: String, val body: String, val action: String?) {
+data class RuleDefinition(val name: String, val body: String, val action: String?, val fragment: Boolean = false) {
     fun generate() : String {
+        val prefix = if (fragment) "fragment " else ""
         val actionPostfix = if (action == null) "" else "-> $action"
-        return "$name : $body $actionPostfix ;"
+        return "$prefix$name : $body $actionPostfix ;"
     }
 }
 
@@ -186,9 +187,9 @@ class ParserDefinitions(val name: String) {
     }
 }
 
-private fun RegExprSpec.toRuleDefinition(lexerState:String, action: String? = null) : RuleDefinition{
+private fun RegExprSpec.toRuleDefinition(lexerState:String, action: String? = null) : RuleDefinition {
     val prefix = if (lexerState== DEFAULT_MODE_NAME) "" else "${lexerState}_"
-    return RuleDefinition(prefix + rexp.label, rexp.tokenProcess(), action)
+    return RuleDefinition(prefix + rexp.label, rexp.tokenProcess(), action, fragment=this.rexp.private_rexp)
 }
 
 fun generateParserDefinitions(name: String, rulesDefinitions: List<NormalProduction>, lexerDefinitions: LexerDefinitions) : ParserDefinitions {
@@ -268,7 +269,8 @@ fun main(args: Array<String>) {
 
     val genericParser = GenericParser(lexerCode, parserCode)
     genericParser.compile()
-    //genericParser.parse("class A { }")
+    val root = genericParser.parse("class A { }")
+    println(root)
 
 //    productionsByName.forEach {
 //        try {
