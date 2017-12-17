@@ -15,6 +15,12 @@ a Lexer and a parser Grammar.
 
 ## Generate an ANTLR in memory
 
-```java
+```kotlin
+val file = File("src/test/resources/java.jj")
+val grammarName = file.nameWithoutExtension.capitalize()
 
+val javaCCGrammar = loadJavaCCGrammar(file)
+val antlrGrammar = javaCCGrammar.convertToAntlr(grammarName)
+this.genericParser = antlrGrammar.genericParser()
+val ast = genericParser.parse("class A { }")
 ```
