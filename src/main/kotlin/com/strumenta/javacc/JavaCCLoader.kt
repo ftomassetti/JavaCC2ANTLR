@@ -1,32 +1,35 @@
 package com.strumenta.javacc
 
 import org.javacc.parser.*
+import org.snt.inmemantlr.GenericParser
 import java.io.File
 import java.io.FileInputStream
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.*
 
-fun Expansion.process() : String {
+fun Expansion.process(lexerDefinitions: LexerDefinitions, namesToUncapitalize: List<String>): String {
     return when (this) {
         is Sequence -> {
             if (this.units.any { it !is Expansion }) {
                 throw UnsupportedOperationException("Sequence element is not an Expansion")
             }
-            this.units.map { (it as Expansion).process() }.joinToString(separator = " ")
+            this.units.map { (it as Expansion).process(lexerDefinitions, namesToUncapitalize) }.joinToString(separator = " ")
         }
         is Lookahead -> "" //println("Lookahead")
         is Choice -> {
             if (this.choices.any { it !is Expansion }) {
                 throw UnsupportedOperationException("Choice element is not an Expansion")
             }
-            "(" + this.choices.joinToString(separator = " | ") { (it as Expansion).process() } + ")"
+            "(" + this.choices.joinToString(separator = " | ") { (it as Expansion).process(lexerDefinitions, namesToUncapitalize) } + ")"
         }
-        is RStringLiteral -> "\"$image\""
+        is RStringLiteral -> lexerDefinitions.ruleForImage(image)?.name ?: "\"$image\""
         is Action -> "" // println("Action")
-        is NonTerminal -> this.name // println("NonTerminal ${this.name}")
-        is ZeroOrOne -> "(${expansion.process()})?"
-        is ZeroOrMore -> "(${expansion.process()})*"
-        is OneOrMore -> "(${expansion.process()})+"
-        is TryBlock -> this.exp.process()
+        is NonTerminal -> this.name.uncapitalize() // println("NonTerminal ${this.name}")
+        is ZeroOrOne -> "(${this.expansion.process(lexerDefinitions, namesToUncapitalize)})?"
+        is ZeroOrMore -> "(${this.expansion.process(lexerDefinitions, namesToUncapitalize)})*"
+        is OneOrMore -> "(${this.expansion.process(lexerDefinitions, namesToUncapitalize)})+"
+        is TryBlock -> this.exp.process(lexerDefinitions, namesToUncapitalize)
         is RJustName -> this.label
         is REndOfFile -> "EOF"
         else -> throw UnsupportedOperationException("Not sure: ${this.javaClass.simpleName}")
@@ -35,7 +38,7 @@ fun Expansion.process() : String {
 
 private fun Any.regExpDescriptorProcess() : String {
     return when (this) {
-        is SingleCharacter -> "'${this.ch.toRegExp()}'"
+        is SingleCharacter -> "${this.ch.toRegExp()}"
         is CharacterRange -> "${this.left}-${this.right}"
         else -> throw UnsupportedOperationException("Not sure: ${this.javaClass.simpleName}")
     }
@@ -46,7 +49,9 @@ private fun Char.toRegExp(): String {
         return "\\f"
     }
     return when (this) {
+        '\\' -> "\\\\"
         ' ' -> " "
+        //'\'' -> "\\'"
         '\r' -> "\\r"
         '\n' -> "\\n"
         '\t' -> "\\t"
@@ -59,18 +64,18 @@ private fun Char.toRegExp(): String {
     }
 }
 
-private fun String.toRegExp() = this.toCharArray().map { it.toRegExp() }.joinToString(separator = "")
+private fun String.toRegExp() = this.toCharArray().joinToString(separator = "") { it.toRegExp() }
 
 
 private fun RegularExpression.tokenProcess() : String {
     return when (this) {
-        is RCharacterList -> "${if (this.negated_list) "~" else ""}[" + this.descriptors.map { it!!.regExpDescriptorProcess() }.joinToString(separator = " ") + "]"
-        is RStringLiteral -> "\"${this.image.toRegExp()}\""
+        is RCharacterList -> "${if (this.negated_list) "~" else ""}[" + this.descriptors.map { it!!.regExpDescriptorProcess() }.joinToString(separator = "") + "]"
+        is RStringLiteral -> if (this.image == "'") "'\\''" else "'${this.image.toRegExp()}'"
         is RSequence -> {
             if (this.units.any { it !is RegularExpression }) {
                 throw UnsupportedOperationException("Sequence element is not an RegularExpression")
             }
-            this.units.map { (it as RegularExpression).tokenProcess() }.joinToString(separator = " ")
+            this.units.joinToString(separator = " ") { (it as RegularExpression).tokenProcess() }
         }
         is RZeroOrMore -> "(${this.regexpr.tokenProcess()})*"
         is ROneOrMore -> "(${this.regexpr.tokenProcess()})+"
@@ -90,7 +95,7 @@ private fun RegExprSpec.process(): String {
     return this.rexp.tokenProcess()
 }
 
-class RuleDefinition(val name: String, val body: String, val action: String?) {
+data class RuleDefinition(val name: String, val body: String, val action: String?) {
     fun generate() : String {
         val actionPostfix = if (action == null) "" else "-> $action"
         return "$name : $body $actionPostfix ;"
@@ -103,30 +108,106 @@ class LexerDefinitions(val name: String) {
 
     private val rulesByMode  = HashMap<String, MutableList<RuleDefinition>>()
 
+    fun ruleForImage(image: String, mode: String = DEFAULT_MODE_NAME) : RuleDefinition? {
+        return rulesByMode[mode]?.firstOrNull {
+            it.body == "'$image'"
+        }
+    }
+
     fun addRuleDefinition(mode: String, ruleDefinition: RuleDefinition) {
         if (!rulesByMode.containsKey(mode)) {
-            rulesByMode[mode] = LinkedList<RuleDefinition>()
+            rulesByMode[mode] = LinkedList()
         }
-        rulesByMode[mode]!!.add(ruleDefinition)
+        var ruleDefinitionCorrected = ruleDefinition
+        if (ruleDefinition.name.isEmpty()) {
+            if (rulesByMode[mode]!!.any { it.body == ruleDefinition.body }) {
+                return
+            }
+            ruleDefinitionCorrected = ruleDefinition.copy(name = generateName(ruleDefinition.body, rulesByMode[mode]!!.map { it.name }.toSet()))
+        }
+        if (ruleDefinitionCorrected.name.startsWith("_")) {
+            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(name = "US_${ruleDefinitionCorrected.name}")
+        }
+        if (ruleDefinitionCorrected.name == ruleDefinitionCorrected.body) {
+            return
+        }
+        if (ruleDefinitionCorrected.body == "~[]") {
+            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(body = ".")
+        }
+        rulesByMode[mode]!!.add(ruleDefinitionCorrected)
     }
 
-    fun generate() {
-        println("lexer grammar $name")
-        printMode(DEFAULT_MODE_NAME)
-        rulesByMode.keys.filter { it != DEFAULT_MODE_NAME }.forEach { printMode(it) }
+    private fun generateName(body: String, usedNames: Set<String>) : String {
+        throw UnsupportedOperationException(body)
     }
 
-    private fun printMode(mode: String) {
-        println()
-        println("// Mode $mode")
+    fun generate() : String {
+        val stringWriter = StringWriter()
+        val printWriter = PrintWriter(stringWriter)
+        printWriter.println("lexer grammar $name;")
+        printMode(DEFAULT_MODE_NAME, printWriter)
+        rulesByMode.keys.filter { it != DEFAULT_MODE_NAME }.forEach { printMode(it, printWriter) }
+        return stringWriter.toString()
+    }
+
+    private fun printMode(mode: String, printWriter: PrintWriter) {
+        printWriter.println()
+        if (mode != DEFAULT_MODE_NAME) {
+            printWriter.println("mode $mode;")
+        }
         rulesByMode[mode]!!.forEach {
-            println(it.generate())
+            printWriter.println(it.generate())
         }
     }
 }
 
-private fun RegExprSpec.toRuleDefinition(action: String? = null) : RuleDefinition{
-    return RuleDefinition(rexp.label, rexp.tokenProcess(), action)
+class ParserDefinitions(val name: String) {
+
+    private val rules = LinkedList<RuleDefinition>()
+
+    fun generate(lexerName: String? = null): String {
+        val stringWriter = StringWriter()
+        val printWriter = PrintWriter(stringWriter)
+        printWriter.println("parser grammar $name;")
+        if (lexerName != null) {
+            printWriter.println()
+            printWriter.println("options { tokenVocab=$lexerName; }")
+        }
+        rules.forEach {
+            printWriter.println()
+
+            printWriter.println(it.generate())
+        }
+        return stringWriter.toString()
+    }
+
+    fun addRuleDefinition(ruleDefinition: RuleDefinition) {
+        rules.add(ruleDefinition)
+    }
+}
+
+private fun RegExprSpec.toRuleDefinition(lexerState:String, action: String? = null) : RuleDefinition{
+    val prefix = if (lexerState== DEFAULT_MODE_NAME) "" else "${lexerState}_"
+    return RuleDefinition(prefix + rexp.label, rexp.tokenProcess(), action)
+}
+
+fun generateParserDefinitions(name: String, rulesDefinitions: List<NormalProduction>, lexerDefinitions: LexerDefinitions) : ParserDefinitions {
+    val parserDefinitions = ParserDefinitions(name)
+    val namesToUncapitalize = rulesDefinitions.map { it.lhs }
+
+    rulesDefinitions.forEach {
+        parserDefinitions.addRuleDefinition(RuleDefinition(it.lhs.uncapitalize(), it.expansion.process(lexerDefinitions, namesToUncapitalize), null))
+    }
+
+    return parserDefinitions
+}
+
+private fun String.uncapitalize(): String {
+    return if (this.isNotEmpty() && this[0].isUpperCase()) {
+        this[0].toLowerCase() + this.substring(1)
+    } else {
+        this
+    }
 }
 
 fun generateLexerDefinitions(name: String, tokenDefinitions: List<TokenProduction>) : LexerDefinitions {
@@ -137,24 +218,26 @@ fun generateLexerDefinitions(name: String, tokenDefinitions: List<TokenProductio
         when (kindImage) {
             "SPECIAL" -> {
                 it.respecs.forEach {
-                    lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition("skip")) }
+                    lexStates.forEach { ls ->
+                        val action = if (ls == DEFAULT_MODE_NAME) "skip" else "popMode"
+                        lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls, action)) }
                 }
             }
             "MORE" -> {
                 it.respecs.forEach {
                     if (it.nextState != null) {
-                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition("pushMode(${it.nextState})")) }
+                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls, "pushMode(${it.nextState})")) }
                     } else {
-                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition()) }
+                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls)) }
                     }
                 }
             }
             "TOKEN" -> {
                 it.respecs.forEach {
                     if (it.nextState != null) {
-                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition("pushMode(${it.nextState})")) }
+                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls, "pushMode(${it.nextState})")) }
                     } else {
-                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition()) }
+                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls)) }
                     }
                 }
             }
@@ -174,8 +257,18 @@ fun main(args: Array<String>) {
 
     val productionsByName = JavaCCGlobals.bnfproductions.associateBy( {it.lhs}, {it} )
 
-    generateLexerDefinitions("Java", JavaCCGlobals.rexprlist).generate()
+    val lexerDefinitions = generateLexerDefinitions("JavaLexer", JavaCCGlobals.rexprlist)
+    val lexerCode = lexerDefinitions.generate()
+    //println(lexerCode)
 
+    val parserCode = generateParserDefinitions("JavaParser", JavaCCGlobals.bnfproductions, lexerDefinitions).generate("JavaLexer")
+
+    File("JavaLexer.g4").printWriter().use { out -> out.print(lexerCode) }
+    File("JavaParser.g4").printWriter().use { out -> out.print(parserCode) }
+
+    val genericParser = GenericParser(lexerCode, parserCode)
+    genericParser.compile()
+    //genericParser.parse("class A { }")
 
 //    productionsByName.forEach {
 //        try {
