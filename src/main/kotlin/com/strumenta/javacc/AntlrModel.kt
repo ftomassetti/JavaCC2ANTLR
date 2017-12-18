@@ -91,7 +91,13 @@ class LexerDefinitions(val name: String) {
             printWriter.println("mode $mode;")
         }
         rulesByMode[mode]!!.forEach {
-            printWriter.println(it.generate())
+            if (it.name.contains("COMMENT") && it.action == null) {
+                printWriter.println(it.copy(action = "skip").generate())
+            } else if (it.name.contains("COMMENT") && it.action != null && !it.action.contains("skip")) {
+                printWriter.println(it.copy(action = "skip, ${it.action}").generate())
+            } else {
+                printWriter.println(it.generate())
+            }
         }
     }
 }

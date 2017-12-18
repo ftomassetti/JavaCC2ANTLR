@@ -108,4 +108,25 @@ class JavaGrammarTest {
                 "      T:RBRACE[}]\n" +
                 "  T:EOF[<EOF>]\n", parseTree.multiLineString())
     }
+
+    @test
+    fun canParseAllGuava() {
+        val guavaSrc = File("src/test/resources/guava-src")
+        parseDir(guavaSrc)
+    }
+
+    private fun parseDir(src: File) {
+        src.listFiles().forEach {
+            if (it.isDirectory) {
+                parseDir(it)
+            } else if (it.isFile && it.extension == "java") {
+                parseJavaFile(it)
+            }
+        }
+    }
+
+    private fun parseJavaFile(javaFile: File) {
+        println("Parsing $javaFile")
+        val ast = genericParser.parse(javaFile)
+    }
 }
