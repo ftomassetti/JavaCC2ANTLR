@@ -127,6 +127,10 @@ class JavaGrammarTest {
 
     private fun parseJavaFile(javaFile: File) {
         println("Parsing $javaFile")
-        val ast = genericParser.parse(javaFile)
+        try {
+            val ast = genericParser.parse(javaFile)
+        } catch (e: Exception) {
+            throw RuntimeException("Issue parsing $javaFile", e)
+        }
     }
 }
