@@ -1,7 +1,7 @@
 package com.strumenta.javacc
 
-import me.tomassetti.kolasu.parsing.ParseTreeLeaf
-import me.tomassetti.kolasu.parsing.ParseTreeNode
+import com.strumenta.kolasu.parsing.ParseTreeLeaf
+import com.strumenta.kolasu.parsing.ParseTreeNode
 import org.antlr.v4.runtime.ParserRuleContext
 import org.antlr.v4.runtime.Vocabulary
 import org.antlr.v4.runtime.tree.TerminalNode
