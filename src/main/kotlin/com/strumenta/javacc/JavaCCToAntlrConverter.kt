@@ -34,14 +34,14 @@ private fun Expansion.process(lexerDefinitions: LexerDefinitions, namesToUncapit
 
 private fun Any.regExpDescriptorProcess() : String {
     return when (this) {
-        is SingleCharacter -> "${this.ch.toRegExp()}"
+        is SingleCharacter -> this.ch.toRegExp()
         is CharacterRange -> "${this.left}-${this.right}"
         else -> throw UnsupportedOperationException("Not sure: ${this.javaClass.simpleName}")
     }
 }
 
 private fun Char.toRegExp(): String {
-    if (this.toInt() == 12) {
+    if (this.code == 12) {
         return "\\f"
     }
     return when (this) {
@@ -52,7 +52,7 @@ private fun Char.toRegExp(): String {
         '\n' -> "\\n"
         '\t' -> "\\t"
         else -> if (this.isWhitespace() || this.isISOControl() || this.category == CharCategory.FORMAT) {
-            return "\\u${String.format("%04X", this.toLong())}"
+            return "\\u${String.format("%04X", this.code.toLong())}"
         } else {
             this.toString()
         }
@@ -91,7 +91,7 @@ private fun RegExprSpec.process(): String {
     return this.rexp.tokenProcess()
 }
 
-val DEFAULT_MODE_NAME = "DEFAULT"
+const val DEFAULT_MODE_NAME = "DEFAULT"
 
 private fun RegExprSpec.toRuleDefinition(lexerState:String, action: String? = null) : RuleDefinition {
     val prefix = if (lexerState== DEFAULT_MODE_NAME) "" else "${lexerState}_"
@@ -111,7 +111,7 @@ private fun generateParserDefinitions(name: String, rulesDefinitions: List<Norma
 
 private fun String.uncapitalize(): String {
     return if (this.isNotEmpty() && this[0].isUpperCase()) {
-        this[0].toLowerCase() + this.substring(1)
+        this[0].lowercaseChar() + this.substring(1)
     } else {
         this
     }
@@ -168,7 +168,7 @@ fun main(args: Array<String>) {
         return
     }
     val file = File(args[0])
-    val grammarName = file.nameWithoutExtension.capitalize()
+    val grammarName = file.nameWithoutExtension.replaceFirstChar(Char::titlecase)
 
     val javaCCGrammar = loadJavaCCGrammar(file)
     val antlrGrammar = javaCCGrammar.convertToAntlr(grammarName)
