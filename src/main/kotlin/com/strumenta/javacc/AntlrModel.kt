@@ -51,9 +51,6 @@ class LexerDefinitions(val name: String) {
     }
 
     fun addRuleDefinition(mode: String, ruleDefinition: RuleDefinition) {
-        if(ruleDefinition.name.contains("TEXT_BL")){
-            println(ruleDefinition.name)
-        }
         if (!rulesByMode.containsKey(mode)) {
             rulesByMode[mode] = LinkedList()
         }
@@ -95,10 +92,9 @@ class LexerDefinitions(val name: String) {
             printWriter.println("mode $mode;")
         }
         rulesByMode[mode]!!.forEach {
-            val specialHandlingRequired = it.name.contains("COMMENT") || it.name.contains("TEXT_BLOCK")
-            if (specialHandlingRequired && it.action == null) {
+            if (it.name.contains("COMMENT") && it.action == null) {
                 printWriter.println(it.copy(action = "skip").generate())
-            } else if (specialHandlingRequired && it.action != null && !it.action.contains("skip")) {
+            } else if (it.name.contains("COMMENT") && it.action != null && !it.action.contains("skip")) {
                 printWriter.println(it.copy(action = "skip, ${it.action}").generate())
             } else {
                 printWriter.println(it.generate())
