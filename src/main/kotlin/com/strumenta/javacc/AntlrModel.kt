@@ -10,6 +10,7 @@ data class RuleDefinition(val name: String, val body: String, val action: String
     fun generate() : String {
         val prefix = if (fragment) "fragment " else ""
         val actionPostfix = if (action == null) "" else "-> $action"
+        val body= if(action!=null && body.contains("|")) "($body)" else body
         return "$prefix$name : $body $actionPostfix ;"
     }
 }
@@ -50,6 +51,9 @@ class LexerDefinitions(val name: String) {
     }
 
     fun addRuleDefinition(mode: String, ruleDefinition: RuleDefinition) {
+        if(ruleDefinition.name.contains("TEXT_BL")){
+            println(ruleDefinition.name)
+        }
         if (!rulesByMode.containsKey(mode)) {
             rulesByMode[mode] = LinkedList()
         }
@@ -66,8 +70,8 @@ class LexerDefinitions(val name: String) {
         if (ruleDefinitionCorrected.name == ruleDefinitionCorrected.body) {
             return
         }
-        if (ruleDefinitionCorrected.body == "~[]") {
-            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(body = ".")
+        if (ruleDefinitionCorrected.body.contains("~[]")) {
+            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(body = ruleDefinitionCorrected.body.replace("~[]", "."))
         }
         rulesByMode[mode]!!.add(ruleDefinitionCorrected)
     }
@@ -91,9 +95,10 @@ class LexerDefinitions(val name: String) {
             printWriter.println("mode $mode;")
         }
         rulesByMode[mode]!!.forEach {
-            if (it.name.contains("COMMENT") && it.action == null) {
+            val specialHandlingRequired = it.name.contains("COMMENT") || it.name.contains("TEXT_BLOCK")
+            if (specialHandlingRequired && it.action == null) {
                 printWriter.println(it.copy(action = "skip").generate())
-            } else if (it.name.contains("COMMENT") && it.action != null && !it.action.contains("skip")) {
+            } else if (specialHandlingRequired && it.action != null && !it.action.contains("skip")) {
                 printWriter.println(it.copy(action = "skip, ${it.action}").generate())
             } else {
                 printWriter.println(it.generate())

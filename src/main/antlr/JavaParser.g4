@@ -2,7 +2,7 @@ parser grammar JavaParser;
 
 options { tokenVocab=JavaLexer; }
 
-compilationUnit :   ( SEMICOLON)* ( packageDeclaration)? (( importDeclaration  |   modifiers ( classOrInterfaceDeclaration  |  enumDeclaration  |  annotationTypeDeclaration  |  moduleDeclaration |  SEMICOLON)))* ( EOF |  CTRL_Z)   ;
+compilationUnit :   ( SEMICOLON)* ( packageDeclaration)? (( importDeclaration  |   modifiers ( classOrInterfaceDeclaration  |  recordDeclaration  |  enumDeclaration  |  annotationTypeDeclaration  |  moduleDeclaration |  SEMICOLON)))* ( EOF |  CTRL_Z)   ;
 
 packageDeclaration :  annotations PACKAGE  name SEMICOLON   ;
 
@@ -10,7 +10,9 @@ importDeclaration :  IMPORT  ( STATIC )? name ( DOT STAR )? SEMICOLON   ;
 
 modifiers :  ( ( PUBLIC  |  STATIC  |  PROTECTED  |  PRIVATE  |  FINAL  |  ABSTRACT  |  SYNCHRONIZED  |  NATIVE  |  TRANSIENT  |  VOLATILE  |  STRICTFP  |  TRANSITIVE  |  US__DEFAULT  |  annotation ))*   ;
 
-classOrInterfaceDeclaration :  ( CLASS |  INTERFACE )  simpleName ( typeParameters)? ( extendsList)? ( implementsList)? classOrInterfaceBody   ;
+classOrInterfaceDeclaration :  ( CLASS  |  INTERFACE )  simpleName ( typeParameters)? ( extendsList)? ( implementsList)? classOrInterfaceBody   ;
+
+recordDeclaration :  RECORD  simpleName ( typeParameters)? parameters ( implementsList)? recordBody   ;
 
 extendsList :  EXTENDS annotatedClassOrInterfaceType  ( COMMA annotatedClassOrInterfaceType )*   ;
 
@@ -18,7 +20,7 @@ implementsList :  IMPLEMENTS annotatedClassOrInterfaceType  ( COMMA annotatedCla
 
 enumDeclaration :  ENUM  simpleName ( implementsList)? LBRACE ( enumConstantDeclaration  ( COMMA enumConstantDeclaration )*)? ( COMMA)? ( SEMICOLON (( classOrInterfaceBodyDeclaration  |  SEMICOLON))*)? RBRACE   ;
 
-enumConstantDeclaration :   ( annotation )* simpleName  ( arguments)? ( classOrInterfaceBody)?   ;
+enumConstantDeclaration :  ( annotation )* simpleName  ( arguments)? ( classOrInterfaceBody)?   ;
 
 typeParameters :  LT  annotations typeParameter  ( COMMA annotations typeParameter )* GT    ;
 
@@ -28,7 +30,13 @@ typeBound :  EXTENDS annotatedClassOrInterfaceType  ( BIT_AND annotatedClassOrIn
 
 classOrInterfaceBody :  LBRACE (( classOrInterfaceBodyDeclaration  |  SEMICOLON))* RBRACE   ;
 
-classOrInterfaceBodyDeclaration :  ( initializerDeclaration |  modifiers ( classOrInterfaceDeclaration |  enumDeclaration |  annotationTypeDeclaration |  constructorDeclaration |  fieldDeclaration |  methodDeclaration))   ;
+recordBody :  LBRACE (( recordBodyDeclaration  |  SEMICOLON))* RBRACE   ;
+
+recordBodyDeclaration :  ( initializerDeclaration |  modifiers ( classOrInterfaceDeclaration |  enumDeclaration |  annotationTypeDeclaration |  compactConstructorDeclaration |  constructorDeclaration |  fieldDeclaration |  methodDeclaration))   ;
+
+compactConstructorDeclaration :  ( typeParameters )? simpleName  ( THROWS annotatedReferenceType  ( COMMA annotatedReferenceType )*)? LBRACE  ( explicitConstructorInvocation)? statements RBRACE   ;
+
+classOrInterfaceBodyDeclaration :  ( initializerDeclaration |  modifiers ( classOrInterfaceDeclaration |  recordDeclaration |  enumDeclaration |  annotationTypeDeclaration |  constructorDeclaration |  fieldDeclaration |  methodDeclaration))   ;
 
 fieldDeclaration :  type variableDeclarator  ( COMMA variableDeclarator )* SEMICOLON   ;
 
@@ -56,7 +64,7 @@ parameter :  modifiers type ( annotations ELLIPSIS )? variableDeclaratorId   ;
 
 receiverParameter :  annotations type receiverParameterId   ;
 
-receiverParameterId :  ( name DOT)? annotations THIS   ;
+receiverParameterId :  ( name DOT)? THIS   ;
 
 constructorDeclaration :  ( typeParameters )? simpleName  parameters ( THROWS annotatedReferenceType  ( COMMA annotatedReferenceType )*)? LBRACE  ( explicitConstructorInvocation)? statements RBRACE   ;
 
@@ -78,7 +86,7 @@ annotatedClassOrInterfaceType :  annotations classOrInterfaceType   ;
 
 classOrInterfaceType :  simpleName  ( typeArguments)?  ( DOT annotations simpleName ( typeArguments)? )*   ;
 
-typeArguments :   LT  ( typeArgument  ( COMMA typeArgument )*)? GT    ;
+typeArguments :  LT  ( typeArgument  ( COMMA typeArgument )*)? GT    ;
 
 typeArgument :  annotations ( type |  wildcard)   ;
 
@@ -88,17 +96,17 @@ primitiveType :  ( BOOLEAN  |  CHAR  |  BYTE  |  SHORT  |  INT  |  LONG  |  FLOA
 
 resultType :  ( VOID  |  type)   ;
 
-name :  annotations identifier  ( DOT annotations identifier )*   ;
+name :  identifier  ( DOT identifier )*   ;
 
 simpleName :  identifier    ;
 
-identifier :  ( MODULE |  REQUIRES |  TO |  WITH |  OPEN |  OPENS |  USES |  EXPORTS |  PROVIDES |  TRANSITIVE |  ENUM |  STRICTFP |  IDENTIFIER)    ;
+identifier :  ( MODULE |  REQUIRES |  TO |  WITH |  OPEN |  OPENS |  USES |  EXPORTS |  PROVIDES |  TRANSITIVE |  ENUM |  STRICTFP |  YIELD |  RECORD |  IDENTIFIER)    ;
 
 expression :  conditionalExpression ( ( assignmentOperator expression  |  ARROW lambdaBody  |  DOUBLECOLON ( typeArguments)? ( identifier |  NEW) ))?   ;
 
 assignmentOperator :  ( ASSIGN  |  STARASSIGN  |  SLASHASSIGN  |  REMASSIGN  |  PLUSASSIGN  |  MINUSASSIGN  |  LSHIFTASSIGN  |  RSIGNEDSHIFTASSIGN  |  RUNSIGNEDSHIFTASSIGN  |  ANDASSIGN  |  XORASSIGN  |  ORASSIGN )   ;
 
-conditionalExpression :  conditionalOrExpression ( HOOK expression COLON conditionalExpression )?   ;
+conditionalExpression :  conditionalOrExpression ( HOOK expression COLON expression )?   ;
 
 conditionalOrExpression :  conditionalAndExpression ( SC_OR conditionalAndExpression )*   ;
 
@@ -112,7 +120,9 @@ andExpression :  equalityExpression ( BIT_AND equalityExpression )*   ;
 
 equalityExpression :  instanceOfExpression ( ( EQ  |  NE ) instanceOfExpression )*   ;
 
-instanceOfExpression :  relationalExpression ( INSTANCEOF annotatedReferenceType )?   ;
+patternExpression :  annotatedReferenceType simpleName   ;
+
+instanceOfExpression :  relationalExpression ( INSTANCEOF ( patternExpression  |  annotatedReferenceType ))?   ;
 
 relationalExpression :  shiftExpression ( ( LT  |  GT  |  LE  |  GE ) shiftExpression )*   ;
 
@@ -128,7 +138,7 @@ preIncrementExpression :  INCR  unaryExpression    ;
 
 preDecrementExpression :  DECR  unaryExpression    ;
 
-unaryExpressionNotPlusMinus :  ( ( TILDE  |  BANG ) unaryExpression  |  castExpression |  postfixExpression)   ;
+unaryExpressionNotPlusMinus :  ( ( TILDE  |  BANG ) unaryExpression  |  castExpression |  postfixExpression |  switchExpression)   ;
 
 postfixExpression :  primaryExpression ( ( INCR  |  DECR ) )?   ;
 
@@ -144,7 +154,7 @@ primarySuffix :  ( primarySuffixWithoutSuper |  DOT SUPER )   ;
 
 primarySuffixWithoutSuper :  ( DOT ( THIS  |  allocationExpression |  ( typeArguments)? simpleName ( arguments )? ) |  LBRACKET expression RBRACKET )   ;
 
-literal :  ( INTEGER_LITERAL  |  LONG_LITERAL  |  FLOATING_POINT_LITERAL  |  CHARACTER_LITERAL  |  STRING_LITERAL  |  booleanLiteral |  nullLiteral)   ;
+literal :  ( INTEGER_LITERAL  |  LONG_LITERAL  |  FLOATING_POINT_LITERAL  |  CHARACTER_LITERAL  |  STRING_LITERAL  |  TEXT_BLOCK_LITERAL  |  booleanLiteral |  nullLiteral)   ;
 
 booleanLiteral :  ( TRUE  |  FALSE )   ;
 
@@ -154,11 +164,11 @@ arguments :  LPAREN ( argumentList)? RPAREN   ;
 
 argumentList :  expression  ( COMMA expression )*   ;
 
-allocationExpression :  NEW  annotations ( primitiveType arrayCreation |  ( typeArguments)? annotatedClassOrInterfaceType ( arrayCreation |  arguments ( classOrInterfaceBody)? ))   ;
+allocationExpression :  NEW  ( typeArguments)? annotations ( primitiveType arrayCreation |  classOrInterfaceType ( arrayCreation |  arguments ( classOrInterfaceBody)? ))   ;
 
 arrayCreation :  ( annotations LBRACKET  ( expression)?  RBRACKET )+ ( arrayInitializer)?   ;
 
-statement :   ( labeledStatement |  assertStatement |  block |  emptyStatement |  statementExpression |  switchStatement |  ifStatement |  whileStatement |  doStatement |  forStatement |  breakStatement |  continueStatement |  returnStatement |  throwStatement |  synchronizedStatement |  tryStatement)   ;
+statement :   ( labeledStatement |  assertStatement |  yieldStatement |  block |  emptyStatement |  statementExpression |  switchStatement |  ifStatement |  whileStatement |  doStatement |  forStatement |  breakStatement |  continueStatement |  returnStatement |  throwStatement |  synchronizedStatement |  tryStatement)   ;
 
 assertStatement :  ASSERT  expression ( COLON expression)? SEMICOLON   ;
 
@@ -166,7 +176,7 @@ labeledStatement :  simpleName  COLON statement   ;
 
 block :  LBRACE   statements RBRACE   ;
 
-blockStatement :   ( modifiers classOrInterfaceDeclaration  |  variableDeclarationExpression SEMICOLON  |  statement)   ;
+blockStatement :   ( modifiers classOrInterfaceDeclaration  |  modifiers recordDeclaration  |  variableDeclarationExpression SEMICOLON  |  statement)   ;
 
 variableDeclarationExpression :  modifiers type variableDeclarator  ( COMMA variableDeclarator )*   ;
 
@@ -178,9 +188,11 @@ statementExpression :  ( preIncrementExpression |  preDecrementExpression |  pri
 
 switchStatement :  SWITCH  LPAREN expression RPAREN LBRACE ( switchEntry )* RBRACE   ;
 
-switchEntry :  ( CASE  expression |  US__DEFAULT ) COLON statements   ;
+switchExpression :  SWITCH  LPAREN expression RPAREN LBRACE ( switchEntry )* RBRACE   ;
 
-ifStatement :  IF  LPAREN expression RPAREN  statement ( ELSE  statement)?   ;
+switchEntry :  ( CASE  conditionalExpression  ( COMMA conditionalExpression )* |  US__DEFAULT ) ( COLON statements  |  ARROW ( expression SEMICOLON  |  block  |  throwStatement ))   ;
+
+ifStatement :  IF  LPAREN expression RPAREN statement ( ELSE statement)?   ;
 
 whileStatement :  WHILE  LPAREN expression RPAREN statement   ;
 
@@ -196,6 +208,8 @@ forUpdate :  expressionList   ;
 
 breakStatement :  BREAK  ( simpleName)? SEMICOLON   ;
 
+yieldStatement :  YIELD  expression SEMICOLON   ;
+
 continueStatement :  CONTINUE  ( simpleName)? SEMICOLON   ;
 
 returnStatement :  RETURN  ( expression)? SEMICOLON   ;
@@ -204,7 +218,7 @@ throwStatement :  THROW  expression SEMICOLON   ;
 
 synchronizedStatement :  SYNCHRONIZED  LPAREN expression RPAREN block   ;
 
-tryStatement :  TRY  ( resourceSpecification)? block ( ( CATCH  LPAREN  modifiers referenceType  ( BIT_OR annotatedReferenceType )* variableDeclaratorId  RPAREN block )* ( FINALLY block)? |  FINALLY block)   ;
+tryStatement :  TRY  ( resourceSpecification)? block ( ( CATCH  LPAREN modifiers  referenceType  ( BIT_OR annotatedReferenceType )* variableDeclaratorId  RPAREN block )* ( FINALLY block)? |  FINALLY block)   ;
 
 resourceSpecification :  LPAREN resources ( SEMICOLON)? RPAREN   ;
 
@@ -212,9 +226,9 @@ resources :  resource  ( SEMICOLON resource )*   ;
 
 resource :  ( variableDeclarationExpression |  primaryExpression)   ;
 
-rUNSIGNEDSHIFT :   GT GT GT  ;
+rUNSIGNEDSHIFT :  GT GT GT  ;
 
-rSIGNEDSHIFT :   GT GT  ;
+rSIGNEDSHIFT :  GT GT  ;
 
 annotations :  ( annotation )*   ;
 
@@ -232,15 +246,15 @@ annotationTypeDeclaration :  AT  INTERFACE simpleName annotationTypeBody   ;
 
 annotationTypeBody :  LBRACE (( annotationBodyDeclaration  |  SEMICOLON))* RBRACE   ;
 
-annotationBodyDeclaration :   modifiers ( annotationTypeMemberDeclaration |  classOrInterfaceDeclaration |  enumDeclaration |  annotationTypeDeclaration |  fieldDeclaration)   ;
+annotationBodyDeclaration :  modifiers ( annotationTypeMemberDeclaration |  classOrInterfaceDeclaration |  enumDeclaration |  annotationTypeDeclaration |  fieldDeclaration)   ;
 
 annotationTypeMemberDeclaration :  type simpleName LPAREN RPAREN ( defaultValue)? SEMICOLON   ;
 
 defaultValue :  US__DEFAULT memberValue   ;
 
-moduleStmt :  ( REQUIRES  TRANSITIVE  SEMICOLON  |  REQUIRES  modifiers name SEMICOLON  |  EXPORTS  name ( TO name  ( COMMA name )*)? SEMICOLON  |  OPENS  name ( TO name  ( COMMA name )*)? SEMICOLON  |  USES  type SEMICOLON  |  PROVIDES  type WITH type  ( COMMA type )* SEMICOLON )   ;
+moduleDirective :  ( REQUIRES  TRANSITIVE  SEMICOLON  |  REQUIRES  modifiers name SEMICOLON  |  EXPORTS  name ( TO name  ( COMMA name )*)? SEMICOLON  |  OPENS  name ( TO name  ( COMMA name )*)? SEMICOLON  |  USES  name SEMICOLON  |  PROVIDES  name WITH name  ( COMMA name )* SEMICOLON )   ;
 
-moduleDeclaration :  ( OPEN )? MODULE  name LBRACE ( moduleStmt )* RBRACE   ;
+moduleDeclaration :  ( OPEN )? MODULE  name LBRACE ( moduleDirective )* RBRACE   ;
 
 blockParseStart :  block EOF   ;
 
@@ -271,3 +285,13 @@ simpleNameParseStart :  simpleName EOF   ;
 parameterParseStart :  parameter EOF   ;
 
 packageDeclarationParseStart :  packageDeclaration EOF   ;
+
+typeDeclarationParseStart :  modifiers ( classOrInterfaceDeclaration |  enumDeclaration |  annotationTypeDeclaration) EOF   ;
+
+moduleDeclarationParseStart :  modifiers moduleDeclaration EOF   ;
+
+moduleDirectiveParseStart :  moduleDirective EOF   ;
+
+typeParameterParseStart :  annotations typeParameter EOF   ;
+
+methodDeclarationParseStart :  modifiers methodDeclaration EOF   ;
