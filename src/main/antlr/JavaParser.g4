@@ -154,7 +154,7 @@ primarySuffix :  ( primarySuffixWithoutSuper |  DOT SUPER )   ;
 
 primarySuffixWithoutSuper :  ( DOT ( THIS  |  allocationExpression |  ( typeArguments)? simpleName ( arguments )? ) |  LBRACKET expression RBRACKET )   ;
 
-literal :  ( INTEGER_LITERAL  |  LONG_LITERAL  |  FLOATING_POINT_LITERAL  |  CHARACTER_LITERAL  |  STRING_LITERAL  |  IN_TEXT_BLOCK_TEXT_BLOCK_LITERAL  |  booleanLiteral |  nullLiteral)   ;
+literal :  ( INTEGER_LITERAL  |  LONG_LITERAL  |  FLOATING_POINT_LITERAL  |  CHARACTER_LITERAL  |  STRING_LITERAL  | TEXT_BLOCK_LITERAL  |  booleanLiteral |  nullLiteral)   ;
 
 booleanLiteral :  ( TRUE  |  FALSE )   ;
 
