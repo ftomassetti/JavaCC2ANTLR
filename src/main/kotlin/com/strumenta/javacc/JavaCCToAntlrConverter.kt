@@ -133,7 +133,8 @@ private fun generateLexerDefinitions(name: String, tokenDefinitions: List<TokenP
             "MORE" -> {
                 it.respecs.forEach {
                     if (it.nextState != null) {
-                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls, "pushMode(${it.nextState})")) }
+                        val action = if (it.nextState == DEFAULT_MODE_NAME) "popMode" else  "pushMode(${it.nextState})"
+                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls, action)) }
                     } else {
                         lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls)) }
                     }
@@ -142,7 +143,8 @@ private fun generateLexerDefinitions(name: String, tokenDefinitions: List<TokenP
             "TOKEN" -> {
                 it.respecs.forEach {
                     if (it.nextState != null) {
-                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls, "pushMode(${it.nextState})")) }
+                        val action = if (it.nextState == DEFAULT_MODE_NAME) "popMode" else  "pushMode(${it.nextState})"
+                        lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls, action)) }
                     } else {
                         lexStates.forEach { ls -> lexerDefinitions.addRuleDefinition(ls, it.toRuleDefinition(ls)) }
                     }

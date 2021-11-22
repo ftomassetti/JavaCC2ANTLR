@@ -10,6 +10,7 @@ data class RuleDefinition(val name: String, val body: String, val action: String
     fun generate() : String {
         val prefix = if (fragment) "fragment " else ""
         val actionPostfix = if (action == null) "" else "-> $action"
+        val body= if(action!=null && body.contains("|")) "($body)" else body
         return "$prefix$name : $body $actionPostfix ;"
     }
 }
@@ -66,8 +67,8 @@ class LexerDefinitions(val name: String) {
         if (ruleDefinitionCorrected.name == ruleDefinitionCorrected.body) {
             return
         }
-        if (ruleDefinitionCorrected.body == "~[]") {
-            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(body = ".")
+        if (ruleDefinitionCorrected.body.contains("~[]")) {
+            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(body = ruleDefinitionCorrected.body.replace("~[]", "."))
         }
         rulesByMode[mode]!!.add(ruleDefinitionCorrected)
     }
