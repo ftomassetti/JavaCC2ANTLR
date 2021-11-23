@@ -1,17 +1,14 @@
 package com.strumenta.javacc
 
-import me.tomassetti.kolasu.parsing.ParseTreeLeaf
-import me.tomassetti.kolasu.parsing.ParseTreeNode
+import com.strumenta.kolasu.parsing.ParseTreeLeaf
+import com.strumenta.kolasu.parsing.ParseTreeNode
 import org.antlr.v4.runtime.ParserRuleContext
 import org.antlr.v4.runtime.Vocabulary
 import org.antlr.v4.runtime.tree.TerminalNode
-import org.junit.Before
 import org.junit.BeforeClass
 import org.slf4j.LoggerFactory
 import org.snt.inmemantlr.GenericParser
-import org.snt.inmemantlr.memobjects.MemoryByteCode
 import java.io.File
-import java.util.HashMap
 import kotlin.test.assertEquals
 import org.junit.Test as test
 
@@ -42,11 +39,9 @@ internal class SpecialClassLoader(parent: ClassLoader) : ClassLoader(parent) {
 
     /**
      * add class to class loader
-     *
-     * @param mbc representation
      */
     fun addClass(className: String, bytes: ByteArray) {
-        m.put(className, bytes)
+        m[className] = bytes
     }
 
     companion object {
@@ -77,13 +72,13 @@ class JavaGrammarTest {
         @BeforeClass
         @JvmStatic fun setup() {
             val file = File("src/test/resources/java.jj")
-            val grammarName = file.nameWithoutExtension.capitalize()
+            val grammarName = file.nameWithoutExtension.replaceFirstChar(Char::titlecase)
 
             val javaCCGrammar = loadJavaCCGrammar(file)
             val antlrGrammar = javaCCGrammar.convertToAntlr(grammarName)
             this.genericParser = antlrGrammar.genericParser()
             val element = genericParser.allCompiledObjects.find { it.isLexer }
-            val specialClassLoader = SpecialClassLoader(javaClass.classLoader)
+            val specialClassLoader = SpecialClassLoader(this::class.java.classLoader)
             element!!.byteCodeObjects.forEach { specialClassLoader.addClass(it.className, it.bytes) }
             val cl = specialClassLoader.loadClass("JavaLexer")
             this.vocabulary = cl.getField("VOCABULARY").get(null) as Vocabulary

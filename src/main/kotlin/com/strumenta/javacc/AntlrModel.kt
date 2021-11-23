@@ -103,9 +103,9 @@ class LexerDefinitions(val name: String) {
     }
 }
 
-class AntlrGrammar(val lexerDefinitions: LexerDefinitions, val parserDefinitions: ParserDefinitions) {
-    fun lexerCode() = lexerDefinitions.generate()
-    fun parserCode() = parserDefinitions.generate(lexerDefinitions.name)
+class AntlrGrammar(private val lexerDefinitions: LexerDefinitions, private val parserDefinitions: ParserDefinitions) {
+    private fun lexerCode() = lexerDefinitions.generate()
+    private fun parserCode() = parserDefinitions.generate(lexerDefinitions.name)
     fun saveLexer(file: File) {
         file.printWriter().use { out -> out.print(lexerCode()) }
     }
