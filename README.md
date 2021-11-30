@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/ftomassetti/JavaCC2ANTLR.svg?branch=master)](https://travis-ci.org/ftomassetti/JavaCC2ANTLR)
 
 JavaCC is an old and venerable tool, used in so many projects. In recent years however ANTLR seems to have a growing community and
-there are different tools to support ANTLR. Also, ANTLR can be generate a parser for so many target languages that
+there are different tools to support ANTLR. Also, ANTLR can be used to generate a parser for so many target languages that
 are not supported by JavaCC.
 
 So I hacked together this little project, in Kotlin.
