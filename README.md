@@ -26,3 +26,7 @@ val antlrGrammar = javaCCGrammar.convertToAntlr(grammarName)
 this.genericParser = antlrGrammar.genericParser()
 val ast = genericParser.parse("class A { }")
 ```
+
+## Licensing
+
+The project is made available under the Apache Public License V2.0. Please see the file called [LICENSE](LICENSE).
