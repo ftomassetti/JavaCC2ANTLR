@@ -1,0 +1,30 @@
+PARSER_BEGIN(MultiStateTokens)
+
+public class MultiStateTokens {
+    public static void main(String[] args) {
+    }
+}
+
+PARSER_END(MultiStateTokens)
+
+<DEFAULT> TOKEN :
+{
+    <HELLO: "HELLO" >
+}
+
+<DEFAULT> TOKEN [IGNORE_CASE] :
+{
+    <WORLD: "WORLD" >
+}
+
+<DEFAULT, A, ALT_DEFAULT> TOKEN :
+{
+    <#LETTER: ["a"-"z","A"-"Z"] >
+|   <WORD: (<LETTER>)+ >
+}
+
+<A, ALT_DEFAULT> TOKEN :
+{
+    <NUMBER: (["0"-"9"])+ >
+|   <TWOLETTER: <LETTER> <LETTER> >
+}

@@ -1,0 +1,41 @@
+PARSER_BEGIN(PushPopStateFuncs)
+
+public class PushPopStateFuncs {
+    public static void main(String[] args) {
+        try {
+            new PushPopStateFuncs(new java.io.StringReader(args[0])).Start();
+            System.out.println("Syntax is okay");
+        } catch (Throwable e) {
+            System.out.println("Syntax is NOT okay: " + e.getMessage());
+        }
+    }
+}
+
+PARSER_END(PushPopStateFuncs)
+
+TOKEN_MGR_DECLS : {
+    List<Integer> lexicalStateStack = new ArrayList<Integer>();
+
+    void pushState() {
+      lexicalStateStack.add(curLexState);
+    }
+
+    void popState() {
+      SwitchTo(lexicalStateStack.remove(lexicalStateStack.size() - 1));
+    }
+
+    private String pushStateFunc = "pushState";
+    private String popStateFunc = "popState";
+}
+
+<INSIDE> SKIP : {
+  <LPAREN:    "("> { pushState(); }
+| <RPAREN:    ")"> { popState(); }
+}
+
+TOKEN : {
+  <TEST:    "TEST("> { pushState(); } : INSIDE
+| <END:     "END">
+}
+
+void Start(): {} { <TEST> <END> <EOF> }

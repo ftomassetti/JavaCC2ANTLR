@@ -1,0 +1,22 @@
+options {
+    IGNORE_CASE = true;
+}
+
+PARSER_BEGIN(CaseInsensitive)
+
+public class CaseInsensitive {
+    public static void main(String[] args) {
+    }
+}
+
+PARSER_END(CaseInsensitive)
+
+<DEFAULT> TOKEN :
+{
+    <HELLO: "HELLO" >
+|   <WORLD: "WORLD" >
+|   <DOCTYPE: "!DOCTYPE" >
+|   <HEADER1: "H1" >
+|   <BLANK: "__blank" >
+|   <A: "A" >
+}
