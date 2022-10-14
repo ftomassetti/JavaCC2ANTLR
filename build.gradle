@@ -48,14 +48,22 @@ generateGrammarSource {
     arguments += ['-package', 'com.strumenta.javacc']
     outputDirectory = new File("generated-src/antlr/main/com/strumenta/javacc".toString())
 }
-compileJava.dependsOn generateGrammarSource
 sourceSets {
     generated {
         java.srcDir 'generated-src/antlr/main/'
     }
 }
-compileJava.source sourceSets.generated.java, sourceSets.main.java
-compileKotlin.source sourceSets.generated.java, sourceSets.main.java, sourceSets.main.kotlin
+compileGeneratedJava.enabled false
+compileGeneratedKotlin.enabled false
+compileJava {
+    dependsOn generateGrammarSource
+    source sourceSets.generated.java, sourceSets.main.java
+}
+compileKotlin {
+    dependsOn generateGrammarSource
+    dependsOn generateGeneratedGrammarSource
+    source sourceSets.generated.java, sourceSets.main.java, sourceSets.main.kotlin
+}
 
 clean {
     delete "generated-src"

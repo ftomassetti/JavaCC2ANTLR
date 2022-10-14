@@ -1,0 +1,29 @@
+PARSER_BEGIN(UnnamedTokens)
+
+public class UnnamedTokens {
+    public static void main(String[] args) {
+    }
+}
+
+PARSER_END(UnnamedTokens)
+
+<DEFAULT, IN_COMMENT> SKIP :
+{
+    " "
+|   "\t"
+|   "\n"
+|   "\r"
+|   "\f"
+}
+
+<DEFAULT> MORE :
+{
+    "/*" : IN_COMMENT
+}
+
+<IN_COMMENT> SPECIAL_TOKEN :
+{
+    <COMMENT: "*/" > : DEFAULT
+}
+
+void Start(): {} { "HELLOWORLD" <EOF> }

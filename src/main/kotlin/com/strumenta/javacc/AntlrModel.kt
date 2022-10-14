@@ -6,11 +6,10 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.util.*
 
-data class RuleDefinition(val name: String, val body: String, val action: String?, val fragment: Boolean = false) {
+data class RuleDefinition(val name: String, val body: String, val commandStr: String, val fragment: Boolean = false) {
     fun generate() : String {
         val prefix = if (fragment) "fragment " else ""
-        val actionPostfix = if (action == null) "" else "-> $action"
-        val body= if(action!=null && body.contains("|")) "($body)" else body
+        val actionPostfix = if (commandStr.isEmpty()) "" else "-> $commandStr"
         return "$prefix$name : $body $actionPostfix ;"
     }
 }
@@ -40,11 +39,12 @@ class ParserDefinitions(val name: String) {
     }
 }
 
-class LexerDefinitions(val name: String) {
+class LexerDefinitions(val name: String, private val generateLetterFragments: Boolean) {
 
-    private val rulesByMode  = HashMap<String, MutableList<RuleDefinition>>()
+    private val rulesByMode = HashMap<String, MutableList<RuleDefinition>>()
+    private val letterFragments: MutableList<RuleDefinition> = generateLetterFragments().toMutableList()
 
-    fun ruleForImage(image: String, mode: String = DEFAULT_MODE_NAME) : RuleDefinition? {
+    fun ruleForImage(image: String, mode: String = JAVACC_DEFAULT_MODE_NAME) : RuleDefinition? {
         return rulesByMode[mode]?.firstOrNull {
             it.body == "'$image'"
         }
@@ -56,15 +56,29 @@ class LexerDefinitions(val name: String) {
         }
         var ruleDefinitionCorrected = ruleDefinition
         if (ruleDefinition.name.isEmpty()) {
-            if (rulesByMode[mode]!!.any { it.body == ruleDefinition.body }) {
-                return
-            }
-            ruleDefinitionCorrected = ruleDefinition.copy(name = generateName(ruleDefinition.body, rulesByMode[mode]!!.map { it.name }.toSet()))
+            throw UnsupportedOperationException(ruleDefinition.body)
         }
         if (ruleDefinitionCorrected.name.startsWith("_")) {
-            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(name = "US_${ruleDefinitionCorrected.name}")
+            // Antlr lexer rule names must begin with a capital letter
+            ruleDefinitionCorrected = ruleDefinitionCorrected.copy(name = "US${ruleDefinitionCorrected.name}")
+        }
+        if (generateLetterFragments
+                && ruleDefinitionCorrected.name.length == 1
+                && ruleDefinitionCorrected.name in "A".."Z") {
+            if (ruleDefinitionCorrected.body.uppercase() == ruleDefinitionCorrected.name.uppercase()) {
+                // If the user's letter rule can serve in place of the letter fragment we would generate, preserve the
+                // rule and skip generating the redundant letter fragment later
+                if (!ruleDefinitionCorrected.fragment) {
+                    val letterFragment = letterFragments.first { it.name == ruleDefinitionCorrected.name }
+                    ruleDefinitionCorrected = ruleDefinitionCorrected.copy(body = letterFragment.body)
+                    letterFragments.remove(letterFragment)
+                }
+            } else {
+                throw UnsupportedOperationException("Rule conflicts with automatically generated case insensitive character fragment: '${ruleDefinitionCorrected.name}' -> ${ruleDefinitionCorrected.body}")
+            }
         }
         if (ruleDefinitionCorrected.name == ruleDefinitionCorrected.body) {
+            // Such a lexer rule would infinitely recurse
             return
         }
         if (ruleDefinitionCorrected.body.contains("~[]")) {
@@ -73,37 +87,37 @@ class LexerDefinitions(val name: String) {
         rulesByMode[mode]!!.add(ruleDefinitionCorrected)
     }
 
-    private fun generateName(body: String, usedNames: Set<String>) : String {
-        throw UnsupportedOperationException(body)
+    private fun generateLetterFragments() : List<RuleDefinition> {
+        // Generate e.g. fragment A: [aA] rules that literals will be rewritten to use to support case insensitivity
+        return (0..25).map {
+            RuleDefinition(('A' + it).toString(), "[" + ('a' + it).toString() + ('A' + it).toString() + "]", "", fragment = true)
+        }
     }
 
     fun generate() : String {
         val stringWriter = StringWriter()
         val printWriter = PrintWriter(stringWriter)
         printWriter.println("lexer grammar $name;")
-        printMode(DEFAULT_MODE_NAME, printWriter)
-        rulesByMode.keys.filter { it != DEFAULT_MODE_NAME }.forEach { printMode(it, printWriter) }
+        if (generateLetterFragments) {
+            letterFragments.forEach { rulesByMode[JAVACC_DEFAULT_MODE_NAME]!!.add(it) }
+        }
+        printMode(JAVACC_DEFAULT_MODE_NAME, printWriter)
+        rulesByMode.keys.filter { it != JAVACC_DEFAULT_MODE_NAME }.forEach { printMode(it, printWriter) }
         return stringWriter.toString()
     }
 
     private fun printMode(mode: String, printWriter: PrintWriter) {
         printWriter.println()
-        if (mode != DEFAULT_MODE_NAME) {
+        if (mode != JAVACC_DEFAULT_MODE_NAME) {
             printWriter.println("mode $mode;")
         }
         rulesByMode[mode]!!.forEach {
-            if (it.name.contains("COMMENT") && it.action == null) {
-                printWriter.println(it.copy(action = "skip").generate())
-            } else if (it.name.contains("COMMENT") && it.action != null && !it.action.contains("skip")) {
-                printWriter.println(it.copy(action = "skip, ${it.action}").generate())
-            } else {
-                printWriter.println(it.generate())
-            }
+            printWriter.println(it.generate())
         }
     }
 }
 
-class AntlrGrammar(private val lexerDefinitions: LexerDefinitions, private val parserDefinitions: ParserDefinitions) {
+class AntlrGrammar(val lexerDefinitions: LexerDefinitions, private val parserDefinitions: ParserDefinitions) {
     private fun lexerCode() = lexerDefinitions.generate()
     private fun parserCode() = parserDefinitions.generate(lexerDefinitions.name)
     fun saveLexer(file: File) {

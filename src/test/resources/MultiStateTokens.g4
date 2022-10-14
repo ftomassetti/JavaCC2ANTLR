@@ -1,0 +1,42 @@
+lexer grammar MultiStateTokensLexer;
+
+HELLO : 'HELLO'  ;
+WORLD : W O R L D  ;
+fragment LETTER : [a-zA-Z]  ;
+WORD : (LETTER)+  ;
+fragment A : [aA]  ;
+fragment B : [bB]  ;
+fragment C : [cC]  ;
+fragment D : [dD]  ;
+fragment E : [eE]  ;
+fragment F : [fF]  ;
+fragment G : [gG]  ;
+fragment H : [hH]  ;
+fragment I : [iI]  ;
+fragment J : [jJ]  ;
+fragment K : [kK]  ;
+fragment L : [lL]  ;
+fragment M : [mM]  ;
+fragment N : [nN]  ;
+fragment O : [oO]  ;
+fragment P : [pP]  ;
+fragment Q : [qQ]  ;
+fragment R : [rR]  ;
+fragment S : [sS]  ;
+fragment T : [tT]  ;
+fragment U : [uU]  ;
+fragment V : [vV]  ;
+fragment W : [wW]  ;
+fragment X : [xX]  ;
+fragment Y : [yY]  ;
+fragment Z : [zZ]  ;
+
+mode A;
+A_WORD : WORD -> type(WORD) ;
+A_NUMBER : NUMBER -> type(NUMBER) ;
+A_TWOLETTER : TWOLETTER -> type(TWOLETTER) ;
+
+mode ALT_DEFAULT;
+ALT_DEFAULT_WORD : WORD -> type(WORD) ;
+NUMBER : ([0-9])+  ;
+TWOLETTER : LETTER LETTER  ;
