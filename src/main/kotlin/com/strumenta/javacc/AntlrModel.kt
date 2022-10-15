@@ -44,9 +44,9 @@ class LexerDefinitions(val name: String, private val generateLetterFragments: Bo
     private val rulesByMode = HashMap<String, MutableList<RuleDefinition>>()
     private val letterFragments: MutableList<RuleDefinition> = generateLetterFragments().toMutableList()
 
-    fun ruleForImage(image: String, mode: String = JAVACC_DEFAULT_MODE_NAME) : RuleDefinition? {
-        return rulesByMode[mode]?.firstOrNull {
-            it.body == "'$image'"
+    fun getRuleByBody(ruleBody: String) : RuleDefinition? {
+        return rulesByMode.values.flatten().firstOrNull {
+            it.body == ruleBody
         }
     }
 
@@ -117,7 +117,7 @@ class LexerDefinitions(val name: String, private val generateLetterFragments: Bo
     }
 }
 
-class AntlrGrammar(val lexerDefinitions: LexerDefinitions, private val parserDefinitions: ParserDefinitions) {
+class AntlrGrammar(val lexerDefinitions: LexerDefinitions, val parserDefinitions: ParserDefinitions) {
     private fun lexerCode() = lexerDefinitions.generate()
     private fun parserCode() = parserDefinitions.generate(lexerDefinitions.name)
     fun saveLexer(file: File) {

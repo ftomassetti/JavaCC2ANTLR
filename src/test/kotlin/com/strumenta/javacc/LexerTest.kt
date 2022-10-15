@@ -14,35 +14,36 @@ class LexerTest {
     }
 
     companion object {
-        fun runTest(javaCCFileName: String, antlrFileName: String) {
-            val file = File("src/test/resources/${javaCCFileName}")
+        fun runTest(fileBaseName: String) {
+            val file = File("src/test/resources/lexer/$fileBaseName.jj")
             val grammarName = file.nameWithoutExtension.replaceFirstChar(Char::titlecase)
             val javaCCGrammar = loadJavaCCGrammar(file)
             val antlrGrammar = javaCCGrammar.convertToAntlr(grammarName)
-            val expectedLexer = File("src/test/resources/${antlrFileName}").inputStream().readBytes().toString(Charsets.UTF_8)
+            val expectedLexerFilename = fileBaseName[0].uppercase() + fileBaseName.substring(1) + "Lexer.g4"
+            val expectedLexer = File("src/test/resources/lexer/$expectedLexerFilename").inputStream().readBytes().toString(Charsets.UTF_8)
             assertEquals(expectedLexer, antlrGrammar.lexerDefinitions.generate())
         }
     }
 
     @Test
     fun pushPopStateFuncs() {
-        runTest("pushPopStateFuncs.jj", "PushPopStateFuncs.g4")
+        runTest("pushPopStateFuncs")
     }
 
     @Test
     fun unnamedTokens() {
-        runTest("unnamedTokens.jj", "UnnamedTokens.g4")
+        runTest("unnamedTokens")
     }
 
     @Test
     fun multiStateTokens() {
-        runTest("multiStateTokens.jj", "MultiStateTokens.g4")
+        runTest("multiStateTokens")
     }
 
     @Test
     fun caseInsensitive() {
         // Note that unlike the other letters, rule A does not get generated as a fragment since there
         // is a real rule matching that literal (e.g. for parsing <a> HTML tags)
-        runTest("caseInsensitive.jj", "CaseInsensitive.g4")
+        runTest("caseInsensitive")
     }
 }
