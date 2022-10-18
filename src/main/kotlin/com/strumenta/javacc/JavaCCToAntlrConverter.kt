@@ -5,32 +5,141 @@ import org.javacc.parser.*
 import java.io.File
 import java.util.*
 
-private fun Expansion.process(lexerDefinitions: LexerDefinitions, namesToUncapitalize: List<String>): String {
+abstract class AntlrRuleComponent {
+    abstract var quantifier: Char?
+
+    abstract override fun toString(): String
+
+    fun quantify(newQuantifier: Char): AntlrRuleComponent {
+        // Note that we nest it within a sequence if it's already quantified, to prevent concatenating quantifiers as doing
+        // so leads to unpredictable runtime behavior in ANTLR. Example: ( (<TOKEN>)+ )? needs to serialize to (TOKEN+)?
+        // and not as TOKEN+? for ANTLR to logically process it as TOKEN* (same as javacc handles it) and not as TOKEN+
+        return if (this.quantifier == null) {
+            this.apply { quantifier = newQuantifier}
+        } else {
+            AntlrSequence(listOf(this), newQuantifier)
+        }
+    }
+}
+
+class AntlrSequence(val elements: List<AntlrRuleComponent>, override var quantifier: Char? = null): AntlrRuleComponent() {
+    init {
+        // Only allow single element sequence if the element is quantified and the sequence is quantified
+        check(elements.size > 1 || (elements.size == 1 && elements[0].quantifier != null && quantifier != null))
+    }
+
+    override fun toString(): String {
+        val joined = elements.joinToString(" ")
+        return if (quantifier != null) "($joined)$quantifier" else joined
+    }
+}
+
+class AntlrChoice(val elements: List<AntlrRuleComponent>, override var quantifier: Char? = null): AntlrRuleComponent() {
+    init {
+        check(elements.size > 1)
+    }
+
+    override fun toString(): String {
+        val joined = elements.joinToString(" | ")
+        return if (quantifier != null) "($joined)$quantifier" else "($joined)"
+    }
+}
+
+class AntlrSingleElement(val element: String, override var quantifier: Char? = null): AntlrRuleComponent() {
+    init {
+        check(element.isNotBlank())
+    }
+
+    override fun toString(): String {
+        return element + (quantifier ?: "")
+    }
+}
+
+private fun Expansion.processRule(lexerDefinitions: LexerDefinitions, parserRuleNames: Set<String>): AntlrRuleComponent? {
     return when (this) {
         is Sequence -> {
             if (this.units.any { it !is Expansion }) {
                 throw UnsupportedOperationException("Sequence element is not an Expansion")
             }
-            this.units.map { (it as Expansion).process(lexerDefinitions, namesToUncapitalize) }.joinToString(separator = " ")
+            val processedRules = this.units.mapNotNull { (it as Expansion).processRule(lexerDefinitions, parserRuleNames) }
+            when {
+                processedRules.isEmpty() -> null // e.g. { .. java code ..} { .. java code .. }
+                processedRules.size == 1 -> processedRules[0] // If only one element (e.g. <TOKEN> { .. java code .. }), promote it
+                else -> AntlrSequence(processedRules)
+            }
         }
-        is Lookahead -> "" //println("Lookahead")
+        is Lookahead -> null
         is Choice -> {
+            check(this.choices.size > 1)
             if (this.choices.any { it !is Expansion }) {
                 throw UnsupportedOperationException("Choice element is not an Expansion")
             }
-            "(" + this.choices.joinToString(separator = " | ") { (it as Expansion).process(lexerDefinitions, namesToUncapitalize) } + ")"
+            val processedRules = this.choices.mapNotNull { (it as Expansion).processRule(lexerDefinitions, parserRuleNames) }
+            // If one of the choice options didn't map to a subrule or element (e.g. it was an action without parser function
+            // terminals, it was a JAVA_CODE non-terminal reference, etc), then the entire choice must be considered optional
+            // because the "null" option is effectively a fallback case
+            val quantifier = if (processedRules.size != this.choices.size) '?' else null
+            val isSequence = processedRules.size == 1
+            return when {
+                processedRules.isEmpty() -> null // Epsilon() | Epsilon()
+                isSequence -> processedRules[0].quantify(quantifier!!) // e.g. <TOKEN> | { .. java code .. }
+                else -> AntlrChoice(processedRules, quantifier)
+            }
         }
-        is RStringLiteral -> lexerDefinitions.ruleForImage(image)?.name ?: "\"$image\""
-        is Action -> "" // println("Action")
-        is NonTerminal -> this.name.uncapitalize() // println("NonTerminal ${this.name}")
-        is ZeroOrOne -> "(${this.expansion.process(lexerDefinitions, namesToUncapitalize)})?"
-        is ZeroOrMore -> "(${this.expansion.process(lexerDefinitions, namesToUncapitalize)})*"
-        is OneOrMore -> "(${this.expansion.process(lexerDefinitions, namesToUncapitalize)})+"
-        is TryBlock -> this.exp.process(lexerDefinitions, namesToUncapitalize)
-        is RJustName -> this.label
-        is REndOfFile -> "EOF"
+        is RStringLiteral -> {
+            // Find the lexer rule that covers this literal (if it's case insensitive grammar it will be fragmentized)
+            // Note we don't need to consider the case where the grammar is globally case sensitive but the individual
+            // lexer rule that would cover this literal is marked case insensitive because that's prohibited in javacc
+            val ruleBody = image.toLexerLiteralRuleElement(Options.getIgnoreCase())
+            val element = lexerDefinitions.getRuleByBody(ruleBody)?.name
+                    ?: throw UnsupportedOperationException("Cannot generate rule element for string literal " +
+                            "'${image}' as ANTLR parser rules can only contain string literals that exactly match " +
+                            "lexer rules and none was found")
+            AntlrSingleElement(element)
+        }
+        is Action -> {
+            var prevToken = Token()
+            // Some non terminals may appear inside actions, e.g. { refValue = PackageName(); } where PackageName is a
+            // parser rule. We use a heuristic to find them and process them as a sequence of NonTerminal expansions.
+            // WARNING: This will not properly handle the case where the action does not call a parser rule exactly once
+            // due to it appearing inside if statements, for loops, etc.
+            // For example, AVOID: { if (bool) refValue = PackageName(); } and { for (expr; expr; expr) PackageName(); }
+            // You would need to hand-write an ANTLR action to emulate that conditional behavior
+            val parserFunctionCalls = this.actionTokens.filter {
+                val isParserFuncCall =
+                        it.kind == JavaCCParserConstants.IDENTIFIER
+                                && parserRuleNames.contains(it.image)
+                                && prevToken.kind != JavaCCParserConstants.NEW // new Blah( is object construction
+                                && it.next?.kind == JavaCCParserConstants.LPAREN
+                prevToken = it
+                isParserFuncCall
+            }
+            return when (parserFunctionCalls.size) {
+                0 -> null // e.g. { .. java code .. }
+                1 -> AntlrSingleElement(parserFunctionCalls[0].image.uncapitalize()) // e.g. { str = ParserRule(); }
+                else -> AntlrSequence(parserFunctionCalls.map { AntlrSingleElement(it.image.uncapitalize()) } ) // e.g. { str1 = ParserRule1(); str2 = ParserRule2(); }
+            }
+        }
+        is NonTerminal -> {
+            // If the non terminal is not a known rule name it should be ignored (probably a JavaCodeProduction call)
+            // JAVACODE void E() {}
+            // void Rule1() : {} { E() }  <--- Ignore the E NonTerminal
+            // Note: This means that parser rules with empty body must still be printed otherwise here we might reference
+            // a nonexistent rule, producing a compilation errors in ANTLR
+            if (parserRuleNames.contains(this.name)) AntlrSingleElement(this.name.uncapitalize()) else null
+        }
+        is ZeroOrOne -> this.expansion.processRule(lexerDefinitions, parserRuleNames)?.quantify('?')
+        is ZeroOrMore -> this.expansion.processRule(lexerDefinitions, parserRuleNames)?.quantify('*')
+        is OneOrMore -> this.expansion.processRule(lexerDefinitions, parserRuleNames)?.quantify('+')
+        is TryBlock -> this.exp.processRule(lexerDefinitions, parserRuleNames)
+        is RJustName -> AntlrSingleElement(this.label)
+        is REndOfFile -> AntlrSingleElement("EOF")
         else -> throw UnsupportedOperationException("Not sure: ${this.javaClass.simpleName}")
     }
+}
+
+private fun Expansion.process(lexerDefinitions: LexerDefinitions, parserRuleNames: Set<String>): String? {
+    return this.processRule(lexerDefinitions, parserRuleNames)?.toString()
 }
 
 private fun Any.toLexerCharSetRuleElement() : String {
@@ -155,10 +264,12 @@ private fun RegExprSpec.toRuleDefinition(name: String, body: String, commands: L
 
 private fun generateParserDefinitions(name: String, rulesDefinitions: List<NormalProduction>, lexerDefinitions: LexerDefinitions) : ParserDefinitions {
     val parserDefinitions = ParserDefinitions(name)
-    val namesToUncapitalize = rulesDefinitions.map { it.lhs }
+    val bnfProductions = rulesDefinitions.filterIsInstance<BNFProduction>()
+    val parserRuleNames = buildSet<String> { bnfProductions.forEach { add(it.lhs) } }
 
-    rulesDefinitions.filterIsInstance<BNFProduction>().forEach {
-        parserDefinitions.addRuleDefinition(RuleDefinition(it.lhs.uncapitalize(), it.expansion.process(lexerDefinitions, namesToUncapitalize), ""))
+    bnfProductions.forEach {
+        val antlrRuleBody = it.expansion.process(lexerDefinitions, parserRuleNames) ?: ""
+        parserDefinitions.addRuleDefinition(RuleDefinition(it.lhs.uncapitalize(), antlrRuleBody, ""))
     }
 
     return parserDefinitions
@@ -196,9 +307,9 @@ private fun getCanonicalLexicalState(states: List<String>): String {
 }
 
 private fun hasIdentifierActionToken(regExprSpec: RegExprSpec, identifier: String?): Boolean {
-    return identifier != null && regExprSpec.act.actionTokens.find {
+    return identifier != null && regExprSpec.act.actionTokens.any {
         token -> token.kind == JavaCCParserConstants.IDENTIFIER && token.image == identifier
-    } != null
+    }
 }
 
 private fun javaCCStateToAntlrMode(state: String?): String? {
@@ -212,7 +323,7 @@ private fun javaCCStateToAntlrMode(state: String?): String? {
 private fun generateLexerDefinitions(name: String, tokenDefinitions: List<TokenProduction>, changeStateFunctions: ChangeStateFunctions) : LexerDefinitions {
     val ignoreCaseAll = Options.getIgnoreCase()
     // Generate letter fragments if some or all tokens should be generated as case-insensitive
-    val generateLetterFragments = ignoreCaseAll || tokenDefinitions.find { it.ignoreCase } != null
+    val generateLetterFragments = ignoreCaseAll || tokenDefinitions.any { it.ignoreCase }
     val lexerDefinitions = LexerDefinitions(name, generateLetterFragments )
     val typeCounter: EnumMap<RuleType, Int> = EnumMap(RuleType.values().associateWith { 0 })
     tokenDefinitions.forEach { production ->

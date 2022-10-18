@@ -1,0 +1,152 @@
+options {
+    STATIC = false;
+    IGNORE_CASE = true;
+}
+
+PARSER_BEGIN(SyntaxChecker)
+
+public class SyntaxChecker {
+    public static void main(String[] args) {
+        try {
+            new SyntaxChecker(new java.io.StringReader(args[0])).Start();
+            System.out.println("Syntax is okay");
+        } catch (Throwable e) {
+            System.out.println("Syntax check failed: " + e.getMessage());
+        }
+    }
+
+    public class NonTerminalsInActions {}
+}
+
+PARSER_END(SyntaxChecker)
+
+SKIP : {
+    < " " >
+}
+
+TOKEN : {
+    <LOREM: "LOREM" >
+|   <IPSUM: "IPSUM" >
+|   <DOLOR: "DOLOR" >
+|   <SIT: "SIT" >
+|   <AMET: "AMET" >
+}
+
+<MODE2> TOKEN : {
+    <BEGIN: "START" >
+}
+
+void SingleToken() : {} {
+    <AMET>
+}
+
+void SingleTokenZeroOrOne() : {} {
+    (<AMET>)?
+}
+
+void SingleTokenZeroOrMore() : {} {
+    (<AMET>)*
+}
+
+void SingleTokenOneOrMore() : {} {
+    (<AMET>)+
+}
+
+void SingleTokenDoubleQuantified() : {} {
+    ((<AMET>)+)?
+}
+
+void Sequence() : {} {
+    <LOREM> <IPSUM>
+}
+
+void SequenceNestedWithAction() : {} {
+    (((<LOREM> <IPSUM> {}) <DOLOR> {}) <SIT> <AMET>)
+}
+
+void SequenceSingle() : {} {
+    <AMET>
+}
+
+void SequenceZeroOrOne() : {} {
+    (<LOREM> <IPSUM>)?
+}
+
+void SequenceZeroOrMore() : {} {
+    (<LOREM> <IPSUM>)*
+}
+
+void SequenceOneOrMore() : {} {
+    (<LOREM> <IPSUM>)+
+}
+
+void Choice() : {} {
+    <DOLOR> | <SIT>
+}
+
+void ChoiceWithLookahead() : {} {
+    LOOKAHEAD(2) <DOLOR> <SIT> | <DOLOR> <AMET>
+}
+
+void TripleNestedChoice() : {} {
+    (((<DOLOR> | <SIT>)))
+}
+
+void ChoiceWithDefaultAction() : {} {
+    <DOLOR> | <SIT> | {}
+}
+
+void ChoiceWithEmptySequence() : {} {
+    <DOLOR> | <SIT> | ({} { E(); })
+}
+
+void ChoiceOfSequences() : {} {
+    <LOREM> <IPSUM> | <DOLOR> <SIT>
+}
+
+void ChoiceWithOptional() : {} {
+    <LOREM> <IPSUM> | [<DOLOR> <SIT>]
+}
+
+JAVACODE
+void E() {}
+
+void ChoiceEmpty() : {} {
+    E() | E()
+}
+
+void ChoiceZeroOrOne() : {} {
+    (<DOLOR> | <SIT>)?
+}
+
+void ChoiceZeroOrMore() : {} {
+    (<DOLOR> | <SIT>)*
+}
+
+void ChoiceOneOrMore() : {} {
+    (<DOLOR> | <SIT>)+
+}
+
+void SequenceAndChoice() : {} {
+    <LOREM> <IPSUM> (<DOLOR> | <SIT>)
+}
+
+void LiteralCaseMismatch() : {} {
+    "start"
+}
+
+void LiteralCaseMatch() : {} {
+    "START"
+}
+
+void NonTerminals() : {} {
+    ChoiceEmpty() E() Sequence()
+}
+
+void NonTerminalsInActions() : { NonTerminalsInActions obj; } {
+    { Choice(); } { obj = new NonTerminalsInActions(); }
+}
+
+void Start() : {} {
+    <BEGIN> SingleToken() Sequence() Choice() <EOF>
+}

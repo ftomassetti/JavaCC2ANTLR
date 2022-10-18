@@ -25,5 +25,3 @@ PARSER_END(UnnamedTokens)
 {
     <COMMENT: "*/" > : DEFAULT
 }
-
-void Start(): {} { "HELLOWORLD" <EOF> }
